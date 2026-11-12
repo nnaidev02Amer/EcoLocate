@@ -11,7 +11,6 @@ import {
   ArrowRight,
   Shield,
   KeyRound,
-  CheckCircle2,
   Building,
   Terminal,
 } from 'lucide-react';
@@ -50,11 +49,6 @@ export const AdminLogin: React.FC = () => {
     }
   };
 
-  const handleQuickFillDemo = () => {
-    setEmail('admin@ecolocate.local');
-    setPassword('EcoLocate@Admin2026!');
-    setError(null);
-  };
 
   return (
     <div className="min-h-[88vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12 bg-[#071A21] tech-grid relative overflow-hidden">
@@ -101,7 +95,7 @@ export const AdminLogin: React.FC = () => {
                 <input
                   type="email"
                   required
-                  placeholder="admin@ecolocate.local"
+                  placeholder="administrator@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-[#071A21] border border-slate-700 rounded-xl text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-[#16A6A0] transition-colors"
@@ -151,29 +145,6 @@ export const AdminLogin: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Credentials Box for Reviewers */}
-          <div className="pt-4 border-t border-slate-800">
-            <div className="bg-[#071A21] p-3.5 rounded-xl border border-[#16A6A0]/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#38D9E8]" />
-                  Evaluator Demo Account
-                </span>
-                <button
-                  type="button"
-                  onClick={handleQuickFillDemo}
-                  className="text-[11px] font-bold text-[#38D9E8] hover:underline"
-                >
-                  Auto-Fill
-                </button>
-              </div>
-              <div className="text-[11px] font-mono text-slate-400 space-y-0.5 bg-[#051419] p-2 rounded-lg border border-slate-800">
-                <div><span className="text-slate-500 select-none">ID:   </span>admin@ecolocate.local</div>
-                <div><span className="text-slate-500 select-none">Pass: </span>EcoLocate@Admin2026!</div>
-              </div>
-            </div>
-          </div>
 
           <div className="text-center pt-2">
             <Link

@@ -11,7 +11,7 @@ const router = Router();
 
 router.post('/', authenticateToken, createPickup);
 router.get('/', authenticateToken, getPickups);
-router.get('/:id', getPickupById);
+router.get('/:id', authenticateToken, getPickupById);
 router.put('/:id/status', authenticateToken, requireRoles(['ADMIN', 'FACILITY_MEMBER']), updatePickupStatus);
 
 export default router;

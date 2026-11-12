@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
+import prisma from '../utils/prisma.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -11,7 +12,7 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -26,7 +27,15 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
       role: string;
       name: string;
     };
-    req.user = decoded;
+    // Re-check the account on every request so deactivated/deleted users lose access immediately
+    const account = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { isActive: true, role: true },
+    });
+    if (!account || account.isActive === false) {
+      return res.status(401).json({ success: false, message: 'Account is deactivated or no longer exists.' });
+    }
+    req.user = { ...decoded, role: account.role };
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid or expired session. Please log in again.' });

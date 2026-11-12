@@ -51,13 +51,8 @@ export const Navbar: React.FC = () => {
       ];
     }
     if (user?.role === 'ADMIN') {
-      return [
-        { path: '/admin', label: 'Admin Dashboard' },
-        { path: '/admin?tab=users', label: 'Users' },
-        { path: '/admin?tab=facilities', label: 'Facilities' },
-        { path: '/admin?tab=verification', label: 'Verification' },
-        { path: '/admin?tab=pickups', label: 'Pickup Requests' },
-      ];
+      // Admin feature navigation lives in the AdminDashboard sidebar; the header stays global-only.
+      return [];
     }
     // Default citizen links
     return [
@@ -74,7 +69,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-50 bg-[#061B21] border-b border-white/10 shadow-md shadow-[#061B21]/20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={`${user?.role === 'ADMIN' ? 'w-full' : 'max-w-7xl mx-auto'} px-4 sm:px-6 lg:px-8`}>
         <div className="flex items-center justify-between h-16 sm:h-18">
           
           {/* Brand Logo */}

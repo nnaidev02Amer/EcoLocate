@@ -26,8 +26,21 @@ import {
   ArrowRight,
   TrendingUp,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { AdminStats, Facility, User, PickupRequest } from '../types';
+
+type AdminNav = 'OVERVIEW' | 'FACILITIES' | 'VERIFICATION' | 'PICKUPS' | 'USERS' | 'REPORTS';
+
+// URL ?tab= value for each sidebar section (OVERVIEW is the default and has no param)
+const NAV_TABS: ReadonlyArray<{ nav: AdminNav; tab: string | null }> = [
+  { nav: 'OVERVIEW', tab: null },
+  { nav: 'FACILITIES', tab: 'facilities' },
+  { nav: 'VERIFICATION', tab: 'verification' },
+  { nav: 'PICKUPS', tab: 'pickups' },
+  { nav: 'USERS', tab: 'users' },
+  { nav: 'REPORTS', tab: 'reports' },
+];
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -37,8 +50,16 @@ export const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  // Active section in sidebar
-  const [activeNav, setActiveNav] = useState<'OVERVIEW' | 'FACILITIES' | 'VERIFICATION' | 'PICKUPS' | 'USERS' | 'REPORTS'>('OVERVIEW');
+  const [pickupsError, setPickupsError] = useState(false);
+
+  // Active section in sidebar is derived from the URL (?tab=) so back/forward and refresh work
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeNav: AdminNav = NAV_TABS.find((n) => n.tab === tabParam)?.nav ?? 'OVERVIEW';
+  const setActiveNav = (nav: AdminNav) => {
+    const tab = NAV_TABS.find((n) => n.nav === nav)?.tab;
+    setSearchParams(tab ? { tab } : {});
+  };
 
   // Filter states for facilities
   const [facilityFilter, setFacilityFilter] = useState<'ALL' | 'VERIFIED' | 'PENDING'>('ALL');
@@ -69,13 +90,18 @@ export const AdminDashboard: React.FC = () => {
         api.getAdminStats(),
         api.getAdminUsers(),
         api.getFacilities({}),
-        api.getPickups().catch(() => ({ success: true, data: [] })),
+        api.getPickups().catch(() => ({ success: false, data: [] })),
       ]);
 
       if (statRes.success) setStats(statRes.data);
       if (userRes.success) setUsersList(userRes.data);
       if (facRes.success) setFacilities(facRes.data);
-      if (pickRes.success) setPickups(pickRes.data || []);
+      if (pickRes.success) {
+        setPickups(pickRes.data || []);
+        setPickupsError(false);
+      } else {
+        setPickupsError(true);
+      }
     } catch (err) {
       console.error('Admin data load error:', err);
     } finally {
@@ -95,9 +121,12 @@ export const AdminDashboard: React.FC = () => {
         if (selectedFacility && selectedFacility.id === facilityId) {
           setSelectedFacility({ ...selectedFacility, isVerified: !currentVerified });
         }
+      } else {
+        alert(res.message || 'Failed to update facility verification status.');
       }
     } catch (err) {
       console.error('Verify toggle error:', err);
+      alert('Failed to update facility verification status. Please try again.');
     }
   };
 
@@ -163,7 +192,7 @@ export const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-[#F5F7F4] flex flex-col md:flex-row">
       
       {/* 1. DARK NAVY SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-[#071A21] text-slate-300 p-5 space-y-6 shrink-0 border-r border-[#16A6A0]/20 tech-grid relative">
+      <aside className="w-full md:w-64 bg-[#071A21] text-slate-300 p-5 space-y-6 shrink-0 border-r border-[#16A6A0]/20 tech-grid relative md:sticky md:top-[4.5rem] md:self-start md:h-[calc(100vh-4.5rem)] md:overflow-y-auto">
         
         {/* Brand Header */}
         <div className="flex items-center gap-2.5 pb-4 border-b border-slate-800">
@@ -322,7 +351,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           
           <div className="bg-white p-4 rounded-xl border border-[#D1DEDF] shadow-card space-y-1 hover:border-[#16A6A0] transition-colors">
-            <span className="text-[11px] font-bold text-[#5e777f] uppercase block">Total Citizens</span>
+            <span className="text-[11px] font-bold text-[#5e777f] uppercase block">Total Accounts</span>
             <span className="text-2xl font-black text-[#071A21] font-['Outfit'] block">{stats?.totalUsers || usersList.length}</span>
             <span className="text-[10px] text-[#5e777f] font-medium block">Registered Accounts</span>
           </div>
@@ -426,6 +455,17 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-[#071A21]">
+                  {filteredFacilities.length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-[#5e777f] font-semibold" colSpan={6}>
+                        {loading
+                          ? 'Loading facilities...'
+                          : activeNav === 'VERIFICATION' && !searchQuery
+                          ? 'No facilities are awaiting verification.'
+                          : 'No facilities match your search or filter.'}
+                      </td>
+                    </tr>
+                  )}
                   {filteredFacilities.map((f) => (
                     <tr key={f.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="p-3">
@@ -488,7 +528,7 @@ export const AdminDashboard: React.FC = () => {
                 <Users className="w-4 h-4 text-[#16A6A0]" />
                 Registered Citizens & Facility Managers Registry
               </h3>
-              <span className="text-xs font-semibold text-[#5e777f]">{usersList.length} Active Accounts</span>
+              <span className="text-xs font-semibold text-[#5e777f]">{usersList.length} Accounts</span>
             </div>
 
             <div className="overflow-x-auto">
@@ -513,7 +553,7 @@ export const AdminDashboard: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           u.role === 'ADMIN'
                             ? 'bg-[#16A6A0]/10 text-[#16A6A0]'
-                            : u.role === 'FACILITY_MANAGER'
+                            : u.role === 'FACILITY_MEMBER'
                             ? 'bg-[#38D9E8]/10 text-[#38D9E8]'
                             : 'bg-slate-100 text-slate-700'
                         }`}>
@@ -527,6 +567,179 @@ export const AdminDashboard: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* SECTION: PICKUP REQUESTS */}
+        {activeNav === 'PICKUPS' && (
+          <div className="bg-white rounded-xl border border-[#D1DEDF] shadow-card p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-sm text-[#071A21] flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#16A6A0]" />
+                Pickup Requests & Manifests
+              </h3>
+              <span className="text-xs font-semibold text-[#5e777f]">{pickups.length} Requests</span>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-xs font-semibold text-[#5e777f]">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Loading pickup requests...
+              </div>
+            ) : pickupsError ? (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-red-50 border border-red-100 text-xs font-semibold text-red-700">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Could not load pickup requests.
+                </span>
+                <button onClick={loadAdminData} className="underline font-bold">Retry</button>
+              </div>
+            ) : pickups.length === 0 ? (
+              <div className="py-10 text-center text-xs font-semibold text-[#5e777f]">
+                No pickup requests have been submitted yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-[#F5F7F4] text-[#5e777f] uppercase font-bold text-[10px] border-y border-[#D1DEDF]">
+                    <tr>
+                      <th className="p-3">Tracking</th>
+                      <th className="p-3">Requester</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Qty / Weight</th>
+                      <th className="p-3">Preferred Slot</th>
+                      <th className="p-3">Facility</th>
+                      <th className="p-3">City</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-[#071A21]">
+                    {pickups.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/50">
+                        <td className="p-3 font-mono font-bold">{p.trackingCode}</td>
+                        <td className="p-3">
+                          <span className="font-bold block">{p.name}</span>
+                          <span className="text-[#5e777f]">{p.email}</span>
+                        </td>
+                        <td className="p-3">{p.category}</td>
+                        <td className="p-3">{p.quantity} unit(s) / {p.weightKg} kg</td>
+                        <td className="p-3 text-[#5e777f]">{p.preferredDate} · {p.preferredTimeSlot}</td>
+                        <td className="p-3 text-[#5e777f]">{p.facility?.name || 'Unassigned'}</td>
+                        <td className="p-3 text-[#5e777f]">{p.city}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-[#16A6A0]">
+                          {p.earnedPoints ?? p.estimatedPoints} Pts
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SECTION: AUDIT & REPORTS (derived only from data already loaded; no extra API calls) */}
+        {activeNav === 'REPORTS' && (
+          <div className="bg-white rounded-xl border border-[#D1DEDF] shadow-card p-5 sm:p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-sm text-[#071A21] flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-[#16A6A0]" />
+                Audit Summary (from recorded pickup requests)
+              </h3>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-xs font-semibold text-[#5e777f]">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Loading audit data...
+              </div>
+            ) : pickupsError ? (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-red-50 border border-red-100 text-xs font-semibold text-red-700">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Could not load pickup records for the audit summary.
+                </span>
+                <button onClick={loadAdminData} className="underline font-bold">Retry</button>
+              </div>
+            ) : (
+              <>
+                {(() => {
+                  const completed = pickups.filter((p) => p.status === 'COMPLETED');
+                  const completedKg = completed.reduce((s, p) => s + (p.weightKg || 0), 0);
+                  const completedPts = completed.reduce((s, p) => s + (p.earnedPoints || 0), 0);
+                  const statusCounts = pickups.reduce<Record<string, number>>((acc, p) => {
+                    acc[p.status] = (acc[p.status] || 0) + 1;
+                    return acc;
+                  }, {});
+                  const cards = [
+                    { label: 'Total Pickup Requests', value: pickups.length },
+                    { label: 'Completed Pickups', value: completed.length },
+                    { label: 'Completed Weight', value: `${completedKg.toFixed(1)} kg` },
+                    { label: 'Points Awarded (Completed)', value: completedPts },
+                    { label: 'Verified Facilities', value: verifiedCount },
+                    { label: 'Pending Verification', value: pendingCount },
+                  ];
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {cards.map((c) => (
+                          <div key={c.label} className="p-4 rounded-xl border border-[#D1DEDF] space-y-1">
+                            <span className="text-[11px] font-bold text-[#5e777f] uppercase block">{c.label}</span>
+                            <span className="text-2xl font-black text-[#071A21] font-['Outfit'] block">{c.value}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-700">
+                          <thead className="bg-[#F5F7F4] text-[#5e777f] uppercase font-bold text-[10px] border-y border-[#D1DEDF]">
+                            <tr>
+                              <th className="p-3">Lifecycle Status</th>
+                              <th className="p-3">Pickup Requests</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-[#071A21]">
+                            {Object.keys(statusCounts).length === 0 ? (
+                              <tr>
+                                <td className="p-3 text-[#5e777f]" colSpan={2}>No pickup records to report yet.</td>
+                              </tr>
+                            ) : (
+                              Object.entries(statusCounts).map(([status, count]) => (
+                                <tr key={status}>
+                                  <td className="p-3 font-bold">{status}</td>
+                                  <td className="p-3">{count}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-[#F5F7F4] border border-[#D1DEDF]">
+                  <p className="text-xs text-[#5e777f] font-medium">
+                    The full CPCB / EPR audit (one row per pickup, with CO₂ offset) is available as a CSV download.
+                    The platform does not currently record an admin activity log, so none is shown here.
+                  </p>
+                  <button
+                    onClick={handleExportCSV}
+                    disabled={exporting}
+                    className="btn-press shrink-0 px-4 py-2.5 bg-[#071A21] hover:bg-[#16A6A0] text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4 text-[#38D9E8]" />
+                    <span>{exporting ? 'Generating...' : 'Download Audit CSV'}</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

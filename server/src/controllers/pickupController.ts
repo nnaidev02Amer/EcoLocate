@@ -195,24 +195,8 @@ export const getPickupById = async (req: AuthRequest, res: Response) => {
       return res.json({ success: true, data: pickup });
     }
 
-    // Unauthenticated or third-party query: Return public redacted tracking info only (PII protected)
-    const redactedData = {
-      id: pickup.id,
-      trackingCode: pickup.trackingCode,
-      category: pickup.category,
-      quantity: pickup.quantity,
-      status: pickup.status,
-      preferredDate: pickup.preferredDate,
-      preferredTimeSlot: pickup.preferredTimeSlot,
-      estimatedPoints: pickup.estimatedPoints,
-      earnedPoints: pickup.earnedPoints,
-      createdAt: pickup.createdAt,
-      updatedAt: pickup.updatedAt,
-      facility: pickup.facility ? { name: pickup.facility.name } : null,
-      isRedacted: true,
-    };
-
-    return res.json({ success: true, data: redactedData });
+    // Any other authenticated user: respond exactly as for a missing record (no existence leak)
+    return res.status(404).json({ success: false, message: 'Pickup request not found.' });
   } catch (error) {
     console.error('Error fetching pickup:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch pickup details.' });

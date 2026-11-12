@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Secrets / environment (keep the example file)
+.env
+.env.*
+!.env.example
+
+# Local databases (SQLite)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Build output & generated files
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Runtime uploads (user-submitted images)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+desktop.ini
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

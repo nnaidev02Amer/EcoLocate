@@ -3,7 +3,23 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// This script DELETES ALL DATA and creates demo accounts with well-known passwords.
+// It is for local development only and refuses to run in production unless explicitly opted in.
+function assertSeedingAllowed() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error(
+      'Refusing to seed: NODE_ENV=production. This script wipes all data and creates demo accounts. ' +
+        'Set ALLOW_DEMO_SEED=true (plus ADMIN_PASSWORD and DEMO_USER_PASSWORD) only for a disposable demo deployment.'
+    );
+  }
+  if (!process.env.ADMIN_PASSWORD || !process.env.DEMO_USER_PASSWORD) {
+    throw new Error('In production, ADMIN_PASSWORD and DEMO_USER_PASSWORD must both be set; the public default passwords are not used.');
+  }
+}
+
 async function main() {
+  assertSeedingAllowed();
   console.log('🌱 Starting Comprehensive All-India E-Waste Facilities Seeding (Major & Minor Centers)...');
 
   // Clean existing data
@@ -15,7 +31,7 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.rewardCatalog.deleteMany();
 
-  const userPasswordHash = await bcrypt.hash('password123', 10);
+  const userPasswordHash = await bcrypt.hash(process.env.DEMO_USER_PASSWORD || 'password123', 10);
   const adminPasswordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'EcoLocate@Admin2026!', 10);
 
   // 1. Create Users

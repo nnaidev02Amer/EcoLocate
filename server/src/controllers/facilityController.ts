@@ -174,8 +174,10 @@ export const createFacility = async (req: AuthRequest, res: Response) => {
         acceptedCategories: Array.isArray(acceptedCategories) ? acceptedCategories.join(', ') : String(acceptedCategories).trim(),
         recyclingServices: recyclingServices ? String(recyclingServices).trim() : 'Collection & Recycling',
         capacity: capacity ? String(capacity).trim() : '10,000 kg/month',
-        isVerified: true,
-        managerId: req.user?.id || null,
+        // Admin-created facilities are trusted; manager-submitted ones need admin verification.
+        isVerified: req.user?.role === 'ADMIN',
+        verificationStatus: req.user?.role === 'ADMIN' ? 'VERIFIED' : 'PENDING',
+        managerId: req.user?.role === 'FACILITY_MEMBER' ? req.user.id : null,
       },
     });
 
@@ -204,13 +206,27 @@ export const updateFacility = async (req: AuthRequest, res: Response) => {
     }
 
     // Sanitize input: Only admin can change verification, status, or active flags
-    const updateData = { ...req.body };
-    if (!isAdmin) {
-      delete updateData.isVerified;
-      delete updateData.isActive;
-      delete updateData.verificationStatus;
-      delete updateData.managerId;
-      delete updateData.rating;
+    // Whitelist fields (prevents mass-assignment / nested Prisma writes like `manager: { update: ... }`)
+    const editableFields = [
+      'name', 'address', 'city', 'state', 'pincode', 'latitude', 'longitude', 'phone', 'email',
+      'website', 'openingHours', 'acceptedCategories', 'recyclingServices', 'capacity',
+    ];
+    const adminOnlyFields = ['isVerified', 'verificationStatus', 'isActive', 'managerId', 'rating'];
+    const allowed = isAdmin ? [...editableFields, ...adminOnlyFields] : editableFields;
+    const updateData: Record<string, any> = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    }
+    for (const key of ['latitude', 'longitude', 'rating']) {
+      if (key in updateData) {
+        updateData[key] = parseFloat(updateData[key]);
+        if (isNaN(updateData[key])) {
+          return res.status(400).json({ success: false, message: `Invalid ${key}.` });
+        }
+      }
+    }
+    if (Array.isArray(updateData.acceptedCategories)) {
+      updateData.acceptedCategories = updateData.acceptedCategories.join(', ');
     }
 
     const updated = await prisma.facility.update({

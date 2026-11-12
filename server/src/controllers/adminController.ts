@@ -13,8 +13,8 @@ export const getAdminStats = async (_req: AuthRequest, res: Response) => {
       select: { weightKg: true, earnedPoints: true },
     });
 
-    const totalWeightKg = completedPickups.reduce((acc, curr) => acc + (curr.weightKg || 0), 0) + 142.5; // includes pre-seeded base impact
-    const totalPointsEarned = completedPickups.reduce((acc, curr) => acc + (curr.earnedPoints || 0), 0) + 3800;
+    const totalWeightKg = completedPickups.reduce((acc, curr) => acc + (curr.weightKg || 0), 0);
+    const totalPointsEarned = completedPickups.reduce((acc, curr) => acc + (curr.earnedPoints || 0), 0);
     const co2SavedKg = parseFloat((totalWeightKg * 2.45).toFixed(1));
 
     return res.json({
@@ -69,7 +69,11 @@ export const verifyFacility = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, message: 'Facility not found.' });
     }
 
+    const allowedStatuses = ['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED'];
     const newStatus = status || (isVerified ? 'VERIFIED' : 'PENDING');
+    if (!allowedStatuses.includes(newStatus)) {
+      return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${allowedStatuses.join(', ')}.` });
+    }
     const verified = newStatus === 'VERIFIED';
 
     const updatedFacility = await prisma.$transaction(async (tx) => {
@@ -81,12 +85,12 @@ export const verifyFacility = async (req: AuthRequest, res: Response) => {
         },
       });
 
+      // Only facility-manager accounts follow the facility's verification state.
+      // Never touch ADMIN/USER accounts (revoking a facility must not lock an admin out).
       if (fac.managerId) {
-        await tx.user.update({
-          where: { id: fac.managerId },
-          data: {
-            isActive: newStatus === 'VERIFIED', // Activated only when VERIFIED
-          },
+        await tx.user.updateMany({
+          where: { id: fac.managerId, role: 'FACILITY_MEMBER' },
+          data: { isActive: newStatus === 'VERIFIED' },
         });
       }
 
@@ -203,9 +207,20 @@ export const toggleUserStatus = async (req: AuthRequest, res: Response) => {
     const id = String(req.params.id);
     const { isActive } = req.body;
 
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'isActive must be a boolean.' });
+    }
+    if (id === req.user?.id && !isActive) {
+      return res.status(400).json({ success: false, message: 'You cannot deactivate your own account.' });
+    }
+    const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
     const user = await prisma.user.update({
       where: { id },
-      data: { isActive: Boolean(isActive) },
+      data: { isActive },
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
 
@@ -228,6 +243,11 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
 
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ success: false, message: 'New password must be at least 8 characters long.' });
+    }
+
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
